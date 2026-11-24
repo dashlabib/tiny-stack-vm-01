@@ -23,8 +23,6 @@ T[0x40] = [0, 1, 1]; T[0x41] = [0, 2, 0];
 T[0x50] = [0, 1, 0]; T[0x51] = [0, 1, 0]; T[0x52] = [0, 0, 1];
 T[0x53] = [0, 1, 0];
 
-const enc = new TextEncoder();
-
 function run(p: Uint8Array, inp: Uint8Array): { out: Uint8Array; code: number } {
   const n = p.length;
   const D = new Int32Array(256);
@@ -115,9 +113,21 @@ function run(p: Uint8Array, inp: Uint8Array): { out: Uint8Array; code: number } 
         break;
       }
       case 0x50: {
-        const bytes = enc.encode(String(D[sp - 1]));
-        if (olen + bytes.length > 65536) return done(11);
-        sp--; out.set(bytes, olen); olen += bytes.length;
+        // PRINT: decimal ASCII without a TextEncoder allocation per print.
+        const v = D[sp - 1];
+        const neg = v < 0;
+        let u = neg ? -v : v; // JS number: 2147483648 for INT_MIN
+        const buf = new Uint8Array(12);
+        let d = 0;
+        if (u === 0) buf[d++] = 48;
+        while (u > 0) { buf[d++] = 48 + (u % 10); u = Math.floor(u / 10); }
+        const len = d + (neg ? 1 : 0);
+        if (olen + len > 65536) return done(11);
+        sp--;
+        let w = olen;
+        if (neg) out[w++] = 45;
+        while (d > 0) out[w++] = buf[--d];
+        olen += len;
         break;
       }
       case 0x51:
